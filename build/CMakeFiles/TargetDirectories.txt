@@ -1,0 +1,3 @@
+/home/hollan/dev/gravitysim/build/CMakeFiles/rebuild_cache.dir
+/home/hollan/dev/gravitysim/build/CMakeFiles/edit_cache.dir
+/home/hollan/dev/gravitysim/build/CMakeFiles/GravitySim.dir

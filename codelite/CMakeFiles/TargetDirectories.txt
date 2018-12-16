@@ -1,0 +1,3 @@
+/home/hollan/dev/gravitysim/codelite/CMakeFiles/rebuild_cache.dir
+/home/hollan/dev/gravitysim/codelite/CMakeFiles/edit_cache.dir
+/home/hollan/dev/gravitysim/codelite/CMakeFiles/GravitySim.dir

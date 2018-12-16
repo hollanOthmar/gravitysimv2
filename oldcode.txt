@@ -1,0 +1,110 @@
+    GDALDataset *poDataset;
+    GDALAllRegister();
+    poDataset = (GDALDataset*) GDALOpen("../../filestut/data/N055W004/N055W004_AVE_DSM_converted.tif",GA_ReadOnly);
+    
+
+    // Lets get the dimensions of the tif
+    int gd_width = GDALGetRasterXSize(poDataset); 
+    int gd_height = GDALGetRasterYSize(poDataset);
+    double x,y,xright,ybottom,xres,yres;
+
+
+    std::string proj;
+    proj = std::string(poDataset->GetProjectionRef());
+    std::cout << "Projection: " << proj << "\n";    
+    // Lets get the upper right hand corner of the tiff and its resolution
+    /*double adfGeoTransform[6];
+    if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None )
+    {
+        printf( "Origin = (%.6f,%.6f)\n",
+            adfGeoTransform[0], adfGeoTransform[3] );
+
+        printf( "Pixel Size = (%.6f,%.6f)\n",
+            adfGeoTransform[1], adfGeoTransform[5] );
+        double x = adfGeoTransform[0];
+        double y = adfGeoTransform[3];
+        double xright = x + adfGeoTransform[1]*gd_width;
+        double ybottom = y + adfGeoTransform[5]*gd_height;
+    }
+    else
+    {
+        std::cout << "Something went wrong!!";
+    }*/
+    
+    //get number of bands
+    int numBands = poDataset->GetRasterCount();
+    std::cout << "There are: " << numBands <<"\n";
+    
+    //std::vector<std::vector<float>> vecs;
+    float min,max;
+    int bGotMin, bGotMax;
+    double adfMinMax[2];
+
+    GDALRasterBand  *poBand;
+
+    poBand = poDataset->GetRasterBand(1);
+    
+    //Get the Min and Max
+    min = adfMinMax[0] = poBand->GetMinimum( &bGotMin );
+    max = adfMinMax[1] = poBand->GetMaximum( &bGotMax );
+    //Dataset dimensions
+    int bandWidth = poBand->GetXSize();
+    int bandHeight = poBand->GetYSize();
+    // Get first raster band
+    std::cout << "First band width: " << bandWidth << "\n";
+    std::cout << "Tiff width: " << gd_width << "\n";
+    
+    float *pafScanline;
+    pafScanline = (float *) CPLMalloc(sizeof(float)*bandWidth*bandHeight);
+    
+    if(!pafScanline){std::cout << "No memory allocated!";}
+    //RasterIO will load the data
+    std::vector<std::vector<float>> out = std::vector<std::vector<float>>(bandWidth,std::vector<float> (bandHeight,0));
+    auto err = poBand->RasterIO(GF_Read,0,0,bandWidth,bandHeight,pafScanline,bandWidth,bandHeight,GDT_Float32,0,0);
+    //std::vector<std::vector<float>> out = std::vector<std::vector<float>>(bandWidth,std::vector<float> (bandHeight,0));
+    
+     // Lets check the status of the loading of this dataset...
+  if (err != 0)
+  {
+      std::cout << "Dataset fail to load with the following error: ";
+    switch (err)
+    {
+    // Look up CPLErrorHandler for more information
+    case 1:
+        std::cout << "DEBUG" << std::endl;
+      break;
+    case 2:
+      std::cout << "Warning" << std::endl;
+      break;
+    case 3:
+      std::cout << "Failure" << std::endl;
+      break;
+    case 4:
+      std::cout << "Fatal" << std::endl;
+      break;
+    }
+  }
+    // move everything to a vector -- slow memory but okay for what we are doing especially when zeroing out zero values
+    for(int i = 0; i < bandWidth; i++)
+    {
+        for(int j = 0; j < bandHeight; j++)
+        {
+            if(pafScanline[(i)*bandWidth+j] > 0)
+                out[i][j] = pafScanline[(i)*bandWidth+j];
+            else
+                out[i][j] = 0;
+        }
+    }
+
+    CPLFree(pafScanline);
+    std::cout << "Done loading..." << std::endl;
+    //For storing vertix informmation
+    // Our vertex information along with normals contained inside
+    std::vector<Vertex> vertexes = std::vector<Vertex>();
+    
+    // Lets do some index rendering because it will save us some memory to some degree
+    std::vector<int> indicies = std::vector<int>();
+    //computations
+    ComputeGeoProperties(poDataset,gd_width,gd_height,x,y,xright,ybottom,xres,yres);
+    //Create mesh
+    createMesh(out,xres,yres,max,indicies,vertexes);
