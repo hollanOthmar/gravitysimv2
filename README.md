@@ -1,5 +1,5 @@
 # gravitysim
-## A 3D mock visualization of how massive objects warps space!
+## A 3D mock visualization of how massive objects warps space!, using cgal and opengl
 
 VIDEO - https://youtu.be/RISrykjeUnY
 
