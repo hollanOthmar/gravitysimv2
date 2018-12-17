@@ -11,6 +11,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/normal.hpp>
 //gdal library
 #include <gdal.h>
 #include <gdal_priv.h>
@@ -29,6 +30,10 @@
 #include <CGAL/Complex_2_in_triangulation_3.h>
 #include <CGAL/make_surface_mesh.h>
 #include <CGAL/Implicit_surface_3.h>
+#include <CGAL/Polygon_mesh_processing/compute_normal.h>
+#include <CGAL/IO/facets_in_complex_2_to_triangle_mesh.h>
+#include <CGAL/IO/output_surface_facets_to_polyhedron.h>
+#include <CGAL/Surface_mesh.h>
 
 using namespace std;
 using namespace chrono;
@@ -47,16 +52,26 @@ FT sphere_function (Point_3 p) {
   const FT x2=p.x()*p.x(), y2=p.y()*p.y(), z2=p.z()*p.z();
   return x2+y2+z2-1;
 }
+typedef GT::Vector_3  Vector_3;
+typedef CGAL::Simple_cartesian<double>                       Kernel;
+//typedef Kernel::Point_3                                      Point;
+typedef CGAL::Surface_mesh<Point_3> 							Mesh;
+typedef CGAL::Polyhedron_3<Kernel>								Polyhedron;
+//typedef Mesh::Vertex_index 								vertex_descriptor;
+typedef boost::graph_traits<Polyhedron>::vertex_descriptor vertex_descriptor;
+typedef boost::graph_traits<Polyhedron>::face_descriptor   face_descriptor;
+//typedef GT::Vector_3 Vector;
 //=======================================================
 
 
 struct Vertex {
     glm::vec3 Position;
-    //glm::vec3 Normal;
+    glm::vec3 Normal;
 };
 
 vector<Vertex> sphereVertices;
-vector<unsigned int> sphereIndices;
+//vector<unsigned int> sphereIndices;
+
 
 
 
@@ -92,6 +107,8 @@ int main()
 {
 	Tr tr;            // 3D-Delaunay triangulation
 	C2t3 c2t3 (tr);   // 2D-complex in 3D-Delaunay triangulation
+	Mesh mesh;			//For storing mesh data
+	Polyhedron p;
 	// defining the surface
 	Surface_3 surface(sphere_function,             // pointer to function
 	Sphere_3(CGAL::ORIGIN, 2.)); // bounding sphere
@@ -110,6 +127,21 @@ int main()
 
        C2t3::Cell_handle cell    = fi->first;
        int opposite_vertex_index = fi->second;
+	   //compute normals
+	   const Point_3& p0 = cell->vertex((opposite_vertex_index)&3)->point();
+		const Point_3& p1 = cell->vertex((opposite_vertex_index+1)&3)->point();
+		const Point_3& p2 = cell->vertex((opposite_vertex_index+2)&3)->point();
+		const Point_3& p3 = cell->vertex((opposite_vertex_index+3)&3)->point();
+		Vector_3 n = ( opposite_vertex_index % 2 == 1) ?
+                           CGAL::normal(p1, p2, p3) :
+                           CGAL::normal(p1, p3, p2);
+		Vector_3 v1 = p1 - p0; 
+						
+		n = n /CGAL::sqrt(n * n);
+		
+		//if ( n * v1 < 0 ) { n = -n; } 
+		
+		
        for(int i = 0; i < 4; i++)
            if(i != opposite_vertex_index) {
 //               std::cout << "(" << cell->vertex(i)->point().x()
@@ -118,7 +150,32 @@ int main()
 //                         << std::endl;
 						 Vertex v;
 						 v.Position = glm::vec3(cell->vertex(i)->point().x(),cell->vertex(i)->point().y(),cell->vertex(i)->point().z());
-						 sphereVertices.push_back(v);
+						 
+						
+						const Point_3& av = cell->vertex(i)->point();
+						//const Point_3& av = cell->vertex((opposite_vertex_index)&3)->point();
+						
+						auto eps = 0.1f;
+						
+						//std::cout << "Sphere function result: " << sphere_function(p1) << "\n";
+						
+						//OLD TEST
+						n = (sphere_function(av + (eps * n)) < 0.0) ? -n : n;
+						//NEW TEST
+						//Vector_3 v1 = p1 - p0; 
+						//n = (CGAL::angle(n, v1) == CGAL::ACUTE) ? -n:n;
+						v.Normal = glm::vec3(n.x(),n.y(),n.z());
+						sphereVertices.push_back(v);
+						//v.Normal = cn;
+						   
+						 //CGAL::facets_in_complex_2_to_triangle_mesh(c2t3,p);
+						 //vertex_descriptor = 
+						 //Vector_3 vc = CGAL::Polygon_mesh_processing::compute_vertex_normal(i,mesh);
+//						std::map<face_descriptor,Vector> fnormals;
+//						std::map<vertex_descriptor,Vector> vnormals;
+//						 CGAL::Polygon_mesh_processing::compute_normals(mesh,
+//                                                 boost::make_assoc_property_map(vnormals),
+//                                                 boost::make_assoc_property_map(fnormals));
            }
     }
 	
@@ -319,6 +376,8 @@ int main()
 	glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(Vertex), &sphereVertices[0], GL_STATIC_DRAW);
 	glEnableVertexAttribArray(0);	
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
 	glBindVertexArray(0);
 	
 
@@ -334,8 +393,10 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
     // set the vertex attributes (only position data for our lamp)
     //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
 	glBindVertexArray(0);
 
     unsigned int uniVAO, uniVBO, uniEBO;
@@ -363,6 +424,7 @@ int main()
     //SETTING UP OBJECT OLD
 	
     glm::vec3 objectCentre = glm::vec3(0.0f,0.0f,0.0f);
+	glm::vec3 objectColor = glm::vec3(0.0f,0.0f,1.0f);
     unsigned int objectVAO;
     glGenVertexArrays(1,&objectVAO);
     glBindVertexArray(objectVAO);
@@ -370,8 +432,10 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
     // set the vertex attributes (only position data for our lamp)
     //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
 	
 	//SETTING UP SPHERE
 	/*
@@ -527,6 +591,14 @@ glGenVertexArrays(1,&VAO2);
         
         objectShader.setMat4f("view",view);
         objectShader.setMat4f("projection",projection);
+		objectShader.setVec3f("lightColor",lightColor);
+        objectShader.setVec3f("lightPos",lightPos);
+        objectShader.setVec3f("viewPos", camera.getPos());
+		objectShader.setVec3f("objectColor",objectColor);
+		//normal matrix for object!
+		glm::mat4 normalMatrix = glm::inverse(objmodel);
+		normalMatrix = glm::transpose(normalMatrix);
+		objectShader.setMat4f("normalMatrix",normalMatrix);
 
         //glDrawArrays(GL_TRIANGLES,0,36);
 		glDrawArrays(GL_TRIANGLES,0,3*sphereVertices.size());

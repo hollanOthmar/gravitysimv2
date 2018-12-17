@@ -1,1 +1,2 @@
 http://wiki.schmid.dk/wiki/index.php/CGAL
+https://doc.cgal.org/latest/Surface_mesher/Surface_mesher_2mesh_a_3d_gray_image_8cpp-example.html#_a2
